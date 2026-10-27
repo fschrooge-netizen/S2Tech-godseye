@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MemoryCache } from '../cache.mjs';
+import { loadSanralCameraFeeds } from '../services/southAfricaTraffic.mjs';
 
 const frameCache = new MemoryCache(300);
 const FRAME_TTL_MS = 6000; // 6 seconds
@@ -225,11 +226,25 @@ export async function handleCctvSources(req, res) {
     // Austin fetch optional, continue with manifest feeds
   }
 
+  // Optional South African camera catalog. It cannot run until the provider's
+  // written republication permission and a server-side developer key exist.
+  const southAfrica = await loadSanralCameraFeeds();
+  for (const feed of southAfrica.feeds) {
+    feedMap.set(feed.id, feed);
+  }
+
   const combinedFeeds = Array.from(feedMap.values());
   const responseObj = {
     generatedAt: new Date().toISOString(),
     feedCount: combinedFeeds.length,
-    verifiedCount: combinedFeeds.length,
+    verifiedCount: combinedFeeds.filter((feed) => feed.verificationStatus === 'verified').length,
+    southAfrica: {
+      source: 'SANRAL i-TRAFFIC',
+      status: southAfrica.status,
+      importedCount: southAfrica.feeds.length,
+      mediaType: 'image',
+      requiresWrittenPermission: true,
+    },
     feeds: combinedFeeds,
   };
 
